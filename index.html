@@ -9,7 +9,8 @@
         try {
           var BOOT_THEME_KEY = 'com.markdownlivepreview_theme';
           var raw = localStorage.getItem(BOOT_THEME_KEY);
-          var useDark = raw === 'dark';
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var useDark = raw === 'dark' || (raw === null && prefersDark);
           document.documentElement.setAttribute('data-theme', useDark ? 'dark' : 'light');
 
           var PREVIEW_CSS_LIGHT = 'css/github-markdown-light.css?v=e3dc51b8a261';

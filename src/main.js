@@ -23,83 +23,68 @@ const init = () => {
     let tabSequence = 0;
     let pendingPreviewScroll = null;
     // default template
-    const defaultInput = `# Markdown syntax guide
+    const defaultInput = `# Welcome to dontread.me
 
-## Headers
+Write Markdown on the left, see it rendered on the right.
 
-# This is a Heading h1
-## This is a Heading h2
-###### This is a Heading h6
+## Headings
 
-## Emphasis
+# Heading one
+## Heading two
+### Heading three
 
-*This text will be italic*  
-_This will also be italic_
+## Text
 
-**This text will be bold**  
-__This will also be bold__
-
-_You **can** combine them_
+*Italic*, **bold**, ***both***, and ~~crossed out~~.
 
 ## Lists
 
-### Unordered
+- First item
+- Second item
+  - Nested item
+  - Another nested item
 
-* Item 1
-* Item 2
-* Item 2a
-* Item 2b
-    * Item 3a
-    * Item 3b
+1. Step one
+2. Step two
+   1. Sub-step
+   2. Sub-step
 
-### Ordered
+## Quote
 
-1. Item 1
-2. Item 2
-3. Item 3
-    1. Item 3a
-    2. Item 3b
-
-## Images
-
-![This is an alt text.](/image/Markdown-mark.svg "This is a sample image.")
-
-## Links
-
-You may be using [dontread.me](https://dontread.me/).
-
-## Blockquotes
-
-> Markdown is a lightweight markup language with plain-text-formatting syntax, created in 2004 by John Gruber with Aaron Swartz.
+> Write first, edit later.
 >
->> Markdown is often used to format readme files, for writing messages in online discussion forums, and to create rich text using a plain text editor.
+> > Every draft starts rough.
 
-## Tables
+## Table
 
-| Left columns  | Right columns |
-| ------------- |:-------------:|
-| left foo      | right foo     |
-| left bar      | right bar     |
-| left baz      | right baz     |
+| Feature | Works |
+| ------- | :---: |
+| Preview |  Yes  |
+| Tabs    |  Yes  |
+| Themes  |  Yes  |
 
-## Blocks of code
+## Code
 
-${"`"}${"`"}${"`"}
-let message = 'Hello world';
-alert(message);
-${"`"}${"`"}${"`"}
+\`\`\`js
+const message = 'Hello, world';
+console.log(message);
+\`\`\`
 
-## Mermaid diagrams
-${"`"}${"`"}${"`"}mermaid
-graph TD
-  A[Start] --> B{Decision}
-  B -->|Yes| C[Finish]
-  B -->|No| D[Alternate]
-${"`"}${"`"}${"`"}
+## Diagram
 
-## Inline code
+\`\`\`mermaid
+graph LR
+  Draft --> Review
+  Review --> Publish
+\`\`\`
 
-This web site is using ${"`"}markedjs/marked${"`"}.
+## Image
+
+![Markdown mark](/image/Markdown-mark.svg "A sample image")
+
+## Link
+
+Start writing at [dontread.me](https://dontread.me/).
 `;
 
     self.MonacoEnvironment = {
@@ -532,6 +517,13 @@ This web site is using ${"`"}markedjs/marked${"`"}.
                 if (raw === 'light') return false;
             } catch (e) {
                 // ignore
+            }
+
+            // Nothing stored yet: start from the system preference.
+            try {
+                return window.matchMedia('(prefers-color-scheme: dark)').matches;
+            } catch (e) {
+                return false;
             }
         }
         return last;
