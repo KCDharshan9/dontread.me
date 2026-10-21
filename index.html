@@ -1,11 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta http-equiv="content-type" content="text/html; charset=UTF-8">
-    <meta http-equiv="content-language" content="en">
-    <meta http-equiv="content-script-type" content="text/javascript">
-    <meta http-equiv="content-style-type" content="text/css">
-    <meta name="description" content="This is the online markdown editor with live preview.">
+    <meta charset="UTF-8">
+    <meta name="description" content="dontread.me is a lightweight browser-based Markdown editor with live preview.">
 
     <script>
       (function(){
@@ -15,8 +12,8 @@
           var useDark = raw === 'dark';
           document.documentElement.setAttribute('data-theme', useDark ? 'dark' : 'light');
 
-          var PREVIEW_CSS_LIGHT = 'css/github-markdown-light.css?v=a1a198514565';
-          var PREVIEW_CSS_DARK = 'css/github-markdown-dark_dimmed.css?v=5d3f5d9d207c';
+          var PREVIEW_CSS_LIGHT = 'css/github-markdown-light.css?v=e3dc51b8a261';
+          var PREVIEW_CSS_DARK = 'css/github-markdown-dark_dimmed.css?v=df221bf84b9d';
           var href = useDark ? PREVIEW_CSS_DARK : PREVIEW_CSS_LIGHT;
 
           var link = document.createElement('link');
@@ -30,27 +27,20 @@
         }
       })();
     </script>
-    <link rel="stylesheet" type="text/css" href="css/style.css?v=2c7cf80bc9e0">
-    <link rel="icon" type="image/png" href="favicon.png">
-    <script type="module" src="/src/main.js?v=1.13.0"></script>
-    <title>Markdown Live Preview</title>
+    <link rel="stylesheet" type="text/css" href="css/style.css?v=6dc78b6f9468">
+    <link rel="icon" href="favicon.ico" sizes="16x16 32x32 48x48">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16.png">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
+    <script type="module" src="/src/main.js"></script>
+    <title>dontread.me</title>
   </head>
-
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-77C1GEG9C8"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'G-77C1GEG9C8');
-  </script>
 
   <body>
 
     <header>
         <div id="menu-items">
-            <div><a href="/">Markdown Live Preview</a></div>
+            <div id="brand"><a href="/"><img src="image/dontreadme-logo.png" alt="dontread.me"></a></div>
             <div><button type="button" id="open-button">Open</button></div>
             <input type="file" id="open-file-input" accept=".md,.markdown,text/markdown" hidden>
             <div id="copy-button"><a href="#">Copy</a></div>
@@ -58,11 +48,15 @@
             <div id="reset-button"><a href="#">Reset</a></div>
             <div id="sync-button">
               <input type="checkbox" id="sync-scroll-checkbox"><label for="sync-scroll-checkbox">Sync scroll</label>
-              <span style="margin-left:12px;"><input type="checkbox" id="theme-checkbox"><label for="theme-checkbox">Dark mode</label></span>
+              <span style="margin-left:16px;"><input type="checkbox" id="theme-checkbox"><label for="theme-checkbox">Dark mode</label></span>
             </div>
         </div>
-        <div id="github"><a href="https://github.com/tanabe/markdown-live-preview"><img src="image/GitHub-Mark-Light-32px.webp"></a></div>
     </header>
+
+    <div id="tabbar">
+        <div id="tablist" role="tablist" aria-label="Open documents"></div>
+        <button type="button" id="tab-new" title="New document" aria-label="New document">+</button>
+    </div>
 
     <div id="container" class="split-container">
 
@@ -80,7 +74,5 @@
             </div>
         </div>
     </div>
-
-    <footer></footer>
   </body>
 </html>
