@@ -5,94 +5,86 @@ import DOMPurify from 'dompurify';
 import mermaid from 'mermaid';
 
 const init = () => {
-    let hasEdited = false;
     let scrollBarSync = false;
 
     const localStorageNamespace = 'com.markdownlivepreview';
     const localStorageKey = 'last_state';
     const localStorageScrollBarKey = 'scroll_bar_settings';
     const localStorageThemeKey = 'theme_settings';
+    const localStorageTabsKey = 'tabs_index';
+    const tabContentKeyPrefix = 'tab_content_';
+    const storeExpiry = new Date(2099, 1, 1);
     const confirmationMessage = 'Are you sure you want to reset? Your changes will be lost.';
     let mermaidRenderTimer = null;
     let mermaidRenderVersion = 0;
+
+    let tabs = [];
+    let activeId = null;
+    let tabSequence = 0;
+    let pendingPreviewScroll = null;
     // default template
-    const defaultInput = `# Markdown syntax guide
+    const defaultInput = `# Welcome to dontread.me
 
-## Headers
+Write Markdown on the left, see it rendered on the right.
 
-# This is a Heading h1
-## This is a Heading h2
-###### This is a Heading h6
+## Headings
 
-## Emphasis
+# Heading one
+## Heading two
+### Heading three
 
-*This text will be italic*  
-_This will also be italic_
+## Text
 
-**This text will be bold**  
-__This will also be bold__
-
-_You **can** combine them_
+*Italic*, **bold**, ***both***, and ~~crossed out~~.
 
 ## Lists
 
-### Unordered
+- First item
+- Second item
+  - Nested item
+  - Another nested item
 
-* Item 1
-* Item 2
-* Item 2a
-* Item 2b
-    * Item 3a
-    * Item 3b
+1. Step one
+2. Step two
+   1. Sub-step
+   2. Sub-step
 
-### Ordered
+## Quote
 
-1. Item 1
-2. Item 2
-3. Item 3
-    1. Item 3a
-    2. Item 3b
-
-## Images
-
-![This is an alt text.](/image/Markdown-mark.svg "This is a sample image.")
-
-## Links
-
-You may be using [Markdown Live Preview](https://markdownlivepreview.com/).
-
-## Blockquotes
-
-> Markdown is a lightweight markup language with plain-text-formatting syntax, created in 2004 by John Gruber with Aaron Swartz.
+> Write first, edit later.
 >
->> Markdown is often used to format readme files, for writing messages in online discussion forums, and to create rich text using a plain text editor.
+> > Every draft starts rough.
 
-## Tables
+## Table
 
-| Left columns  | Right columns |
-| ------------- |:-------------:|
-| left foo      | right foo     |
-| left bar      | right bar     |
-| left baz      | right baz     |
+| Feature | Works |
+| ------- | :---: |
+| Preview |  Yes  |
+| Tabs    |  Yes  |
+| Themes  |  Yes  |
 
-## Blocks of code
+## Code
 
-${"`"}${"`"}${"`"}
-let message = 'Hello world';
-alert(message);
-${"`"}${"`"}${"`"}
+\`\`\`js
+const message = 'Hello, world';
+console.log(message);
+\`\`\`
 
-## Mermaid diagrams
-${"`"}${"`"}${"`"}mermaid
-graph TD
-  A[Start] --> B{Decision}
-  B -->|Yes| C[Finish]
-  B -->|No| D[Alternate]
-${"`"}${"`"}${"`"}
+## Diagram
 
-## Inline code
+\`\`\`mermaid
+graph LR
+  Draft --> Review
+  Review --> Publish
+\`\`\`
 
-This web site is using ${"`"}markedjs/marked${"`"}.
+## Image
+
+![Markdown mark](/image/Markdown-mark.svg "A sample image")
+
+## Link
+
+Start writing at [dontread.me](https://dontread.me/).
 `;
 
     self.MonacoEnvironment = {
@@ -103,6 +95,7 @@ This web site is using ${"`"}markedjs/marked${"`"}.
 
     let setupEditor = () => {
         let editor = monaco.editor.create(document.querySelector('#editor'), {
+            model: null,
             fontSize: 14,
             language: 'markdown',
             minimap: { enabled: false },
@@ -120,13 +113,9 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         });
 
         editor.onDidChangeModelContent(() => {
-            let changed = editor.getValue() != defaultInput;
-            if (changed) {
-                hasEdited = true;
-            }
             let value = editor.getValue();
             convert(value);
-            saveLastContent(value);
+            saveActiveContent(value);
         });
 
         editor.onDidScrollChange((e) => {
@@ -226,6 +215,16 @@ This web site is using ${"`"}markedjs/marked${"`"}.
                 showMermaidError(element, error);
             }
         }
+
+        // Diagrams can change the page height after the switch, so restore
+        // the remembered preview position once they have settled.
+        if (pendingPreviewScroll !== null) {
+            const previewElement = document.querySelector('#preview');
+            if (previewElement) {
+                previewElement.scrollTop = pendingPreviewScroll;
+            }
+            pendingPreviewScroll = null;
+        }
     };
 
     let scheduleMermaidRender = () => {
@@ -265,8 +264,9 @@ This web site is using ${"`"}markedjs/marked${"`"}.
 
     // Reset input text
     let reset = () => {
+        const tab = getActiveTab();
         let changed = editor.getValue() != defaultInput;
-        if (hasEdited || changed) {
+        if ((tab && tab.dirty) || changed) {
             var confirmed = window.confirm(confirmationMessage);
             if (!confirmed) {
                 return;
@@ -282,7 +282,10 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         editor.setValue(value);
         editor.revealPosition({ lineNumber: 1, column: 1 });
         editor.focus();
-        hasEdited = false;
+        let tab = getActiveTab();
+        if (tab) {
+            tab.dirty = false;
+        }
     };
 
     // ----- sync scroll position -----
@@ -300,8 +303,8 @@ This web site is using ${"`"}markedjs/marked${"`"}.
     };
 
     // ----- preview CSS loader (switch github-markdown css) -----
-    const PREVIEW_CSS_LIGHT = 'css/github-markdown-light.css?v=a1a198514565';
-    const PREVIEW_CSS_DARK = 'css/github-markdown-dark_dimmed.css?v=5d3f5d9d207c';
+    const PREVIEW_CSS_LIGHT = 'css/github-markdown-light.css?v=e3dc51b8a261';
+    const PREVIEW_CSS_DARK = 'css/github-markdown-dark_dimmed.css?v=df221bf84b9d';
 
     let setPreviewCss = (useDark) => {
         const link = document.getElementById('gh-markdown-link');
@@ -357,14 +360,6 @@ This web site is using ${"`"}markedjs/marked${"`"}.
             }
             renderMermaidDiagrams();
         });
-    };
-
-    let enableScrollBarSync = () => {
-        scrollBarSync = true;
-    };
-
-    let disableScrollBarSync = () => {
-        scrollBarSync = false;
     };
 
     // ----- clipboard utils -----
@@ -428,7 +423,6 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         renderMermaidDiagrams(printTheme).then(() => {
             window.print();
         }).catch((error) => {
-            // eslint-disable-next-line no-console
             console.error('Failed to prepare PDF export', error);
             if (currentTheme === 'dark') {
                 cleanupPrintThemeListener();
@@ -466,7 +460,7 @@ This web site is using ${"`"}markedjs/marked${"`"}.
                 button.disabled = false;
             }
 
-            presetValue(content);
+            addTab(content, titleFromFilename(file.name));
             document.querySelector('#preview').scrollTo({ top: 0 });
         });
     };
@@ -509,11 +503,6 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         return lastContent;
     };
 
-    let saveLastContent = (content) => {
-        let expiredAt = new Date(2099, 1, 1);
-        Storehouse.setItem(localStorageNamespace, localStorageKey, content, expiredAt);
-    };
-
     let loadScrollBarSettings = () => {
         let lastContent = Storehouse.getItem(localStorageNamespace, localStorageScrollBarKey);
         return lastContent;
@@ -529,6 +518,13 @@ This web site is using ${"`"}markedjs/marked${"`"}.
                 if (raw === 'light') return false;
             } catch (e) {
                 // ignore
+            }
+
+            // Nothing stored yet: start from the system preference.
+            try {
+                return window.matchMedia('(prefers-color-scheme: dark)').matches;
+            } catch (e) {
+                return false;
             }
         }
         return last;
@@ -547,6 +543,357 @@ This web site is using ${"`"}markedjs/marked${"`"}.
         } catch (e) {
             // ignore storage errors
         }
+    };
+
+    // ----- documents (tabs) -----
+
+    let storeSet = (key, value) => {
+        Storehouse.setItem(localStorageNamespace, key, value, storeExpiry);
+    };
+
+    let storeGet = (key) => {
+        return Storehouse.getItem(localStorageNamespace, key);
+    };
+
+    let storeDelete = (key) => {
+        Storehouse.deleteItem(localStorageNamespace, key);
+    };
+
+    let tabContentKey = (id) => {
+        return tabContentKeyPrefix + id;
+    };
+
+    let getTab = (id) => {
+        return tabs.find((tab) => tab.id === id) || null;
+    };
+
+    let getActiveTab = () => {
+        return getTab(activeId);
+    };
+
+    let nextUntitledTitle = () => {
+        let n = 1;
+        while (tabs.some((tab) => tab.title === 'Untitled ' + n)) {
+            n += 1;
+        }
+        return 'Untitled ' + n;
+    };
+
+    let uniqueTitle = (base) => {
+        if (!tabs.some((tab) => tab.title === base)) {
+            return base;
+        }
+        let n = 2;
+        while (tabs.some((tab) => tab.title === base + ' (' + n + ')')) {
+            n += 1;
+        }
+        return base + ' (' + n + ')';
+    };
+
+    let titleFromFilename = (name) => {
+        let base = String(name || '').replace(/\.(md|markdown|mdown|mkd|txt)$/i, '').trim();
+        return base || 'Untitled';
+    };
+
+    let persistTabsIndex = () => {
+        storeSet(localStorageTabsKey, {
+            activeId: activeId,
+            tabs: tabs.map((tab) => ({ id: tab.id, title: tab.title }))
+        });
+    };
+
+    let loadTabsIndex = () => {
+        let index;
+        try {
+            index = storeGet(localStorageTabsKey);
+        } catch (error) {
+            return null;
+        }
+
+        if (!index || typeof index !== 'object' || !Array.isArray(index.tabs) || index.tabs.length === 0) {
+            return null;
+        }
+
+        let entries = index.tabs
+            .filter((entry) => entry && typeof entry.id === 'string' && entry.id)
+            .map((entry) => ({
+                id: entry.id,
+                title: typeof entry.title === 'string' && entry.title ? entry.title : 'Untitled'
+            }));
+
+        if (entries.length === 0) {
+            return null;
+        }
+
+        return { activeId: index.activeId, tabs: entries };
+    };
+
+    let createTab = (content, title, id) => {
+        tabSequence += 1;
+        let tab = {
+            id: id || 't' + tabSequence + '-' + Date.now().toString(36),
+            title: title,
+            model: monaco.editor.createModel(content, 'markdown'),
+            viewState: null,
+            previewScrollTop: 0,
+            dirty: false
+        };
+        tabs.push(tab);
+        storeSet(tabContentKey(tab.id), content);
+        return tab;
+    };
+
+    let saveActiveContent = (content) => {
+        let tab = getActiveTab();
+        if (!tab) {
+            return;
+        }
+        tab.dirty = true;
+        storeSet(tabContentKey(tab.id), content);
+        // Kept in sync so an older build can still open the active document.
+        storeSet(localStorageKey, content);
+    };
+
+    let renderTabBar = () => {
+        let list = document.querySelector('#tablist');
+        if (!list) {
+            return;
+        }
+
+        list.textContent = '';
+
+        tabs.forEach((tab) => {
+            let isActive = tab.id === activeId;
+
+            let element = document.createElement('div');
+            element.className = isActive ? 'tab active' : 'tab';
+            element.setAttribute('role', 'tab');
+            element.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            element.tabIndex = isActive ? 0 : -1;
+            element.dataset.id = tab.id;
+            element.title = tab.title;
+
+            let label = document.createElement('span');
+            label.className = 'tab-title';
+            label.textContent = tab.title;
+
+            let close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'tab-close';
+            close.title = 'Close';
+            close.setAttribute('aria-label', 'Close ' + tab.title);
+            close.textContent = '\u00d7';
+
+            element.appendChild(label);
+            element.appendChild(close);
+            list.appendChild(element);
+        });
+    };
+
+    let persistActiveView = () => {
+        let tab = getActiveTab();
+        if (!tab) {
+            return;
+        }
+
+        try {
+            tab.viewState = editor.saveViewState();
+        } catch (error) {
+            tab.viewState = null;
+        }
+
+        let previewElement = document.querySelector('#preview');
+        if (previewElement) {
+            tab.previewScrollTop = previewElement.scrollTop;
+        }
+    };
+
+    let activateTab = (id, options) => {
+        let settings = options || {};
+        let next = getTab(id);
+
+        if (!next) {
+            return;
+        }
+
+        if (id === activeId) {
+            if (settings.focus !== false) {
+                editor.focus();
+            }
+            return;
+        }
+
+        persistActiveView();
+
+        let value = next.model.getValue();
+        activeId = id;
+        editor.setModel(next.model);
+
+        if (next.viewState) {
+            try {
+                editor.restoreViewState(next.viewState);
+            } catch (error) {
+                // stale view state for this model — start from the top
+            }
+        }
+
+        convert(value);
+        pendingPreviewScroll = next.previewScrollTop || 0;
+
+        let previewElement = document.querySelector('#preview');
+        if (previewElement) {
+            previewElement.scrollTop = pendingPreviewScroll;
+        }
+
+        storeSet(tabContentKey(next.id), value);
+        storeSet(localStorageKey, value);
+        persistTabsIndex();
+        renderTabBar();
+
+        if (settings.focus !== false) {
+            editor.focus();
+        }
+    };
+
+    let addTab = (content, baseTitle) => {
+        let title = baseTitle ? uniqueTitle(baseTitle) : nextUntitledTitle();
+        let tab = createTab(content, title);
+        activateTab(tab.id);
+        return tab;
+    };
+
+    let closeTab = (id) => {
+        let tab = getTab(id);
+        if (!tab) {
+            return;
+        }
+
+        if (tab.model.getValue().trim() !== '') {
+            if (!window.confirm('Close "' + tab.title + '"? Its content will be lost.')) {
+                return;
+            }
+        }
+
+        let index = tabs.indexOf(tab);
+        let wasActive = id === activeId;
+
+        if (wasActive) {
+            let neighbour = tabs[index + 1] || tabs[index - 1] || null;
+            activeId = null;
+            if (neighbour) {
+                activateTab(neighbour.id, { focus: false });
+            } else {
+                editor.setModel(null);
+            }
+        }
+
+        tabs = tabs.filter((entry) => entry.id !== id);
+
+        try {
+            tab.model.dispose();
+        } catch (error) {
+            // model already detached from the editor
+        }
+
+        storeDelete(tabContentKey(id));
+
+        if (tabs.length === 0) {
+            let fresh = createTab('', nextUntitledTitle());
+            activateTab(fresh.id, { focus: false });
+            return;
+        }
+
+        persistTabsIndex();
+        renderTabBar();
+    };
+
+    let setupTabBar = () => {
+        let list = document.querySelector('#tablist');
+        let addButton = document.querySelector('#tab-new');
+
+        if (addButton) {
+            addButton.addEventListener('click', () => {
+                addTab('', null);
+            });
+        }
+
+        if (!list) {
+            return;
+        }
+
+        list.addEventListener('click', (event) => {
+            let tabElement = event.target.closest('.tab');
+            if (!tabElement) {
+                return;
+            }
+
+            if (event.target.closest('.tab-close')) {
+                closeTab(tabElement.dataset.id);
+                return;
+            }
+
+            activateTab(tabElement.dataset.id);
+        });
+
+        list.addEventListener('keydown', (event) => {
+            let tabElement = event.target.closest('.tab');
+            if (!tabElement) {
+                return;
+            }
+
+            if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                activateTab(tabElement.dataset.id);
+                return;
+            }
+
+            if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+                let index = tabs.findIndex((tab) => tab.id === tabElement.dataset.id);
+                if (index === -1) {
+                    return;
+                }
+
+                event.preventDefault();
+                let offset = event.key === 'ArrowRight' ? 1 : -1;
+                let target = tabs[(index + offset + tabs.length) % tabs.length];
+                activateTab(target.id, { focus: false });
+
+                let focused = list.querySelector('.tab.active');
+                if (focused) {
+                    focused.focus();
+                }
+            }
+        });
+
+        // The strip hides its scrollbar, so let the wheel move it sideways.
+        list.addEventListener('wheel', (event) => {
+            if (event.deltaY === 0 || list.scrollWidth <= list.clientWidth) {
+                return;
+            }
+            list.scrollLeft += event.deltaY;
+            event.preventDefault();
+        }, { passive: false });
+    };
+
+    let initTabs = () => {
+        let index = loadTabsIndex();
+
+        if (index) {
+            index.tabs.forEach((entry) => {
+                let content = storeGet(tabContentKey(entry.id));
+                createTab(typeof content === 'string' ? content : '', entry.title, entry.id);
+            });
+
+            let target = tabs.some((tab) => tab.id === index.activeId) ? index.activeId : tabs[0].id;
+            activateTab(target);
+            return;
+        }
+
+        // First run after the upgrade: adopt the single-document state as tab one.
+        let legacyContent = loadLastContent();
+        let seed = typeof legacyContent === 'string' ? legacyContent : defaultInput;
+        let tab = createTab(seed, nextUntitledTitle());
+        activateTab(tab.id);
     };
 
     let setupDivider = () => {
@@ -626,13 +973,9 @@ This web site is using ${"`"}markedjs/marked${"`"}.
     };
 
     // ----- entry point -----
-    let lastContent = loadLastContent();
     let editor = setupEditor();
-    if (typeof lastContent === 'string') {
-        presetValue(lastContent);
-    } else {
-        presetValue(defaultInput);
-    }
+    setupTabBar();
+    initTabs();
     setupOpenButton();
     setupResetButton();
     setupCopyButton(editor);
