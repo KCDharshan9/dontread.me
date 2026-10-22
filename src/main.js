@@ -84,7 +84,7 @@ graph LR
 
 ## Link
 
-Start writing at [dontread.me](https://dontread.me/).
+Start writing at [dontread.me](https://dontread-me.vercel.app/).
 `;
 
     self.MonacoEnvironment = {
